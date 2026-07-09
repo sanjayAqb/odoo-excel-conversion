@@ -1,0 +1,3 @@
+External,ID,Category,Name,Parent,Category,/,External,ID
+cat_nicotine_pouch,NICOTINE,POUCH,N1,,,,,
+cat_pipe_tobacco,PIPE,TOBACCO,N1,cat_nicotine_pouch,,,,

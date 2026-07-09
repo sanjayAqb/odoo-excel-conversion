@@ -3,16 +3,47 @@
 (() => {
   "use strict";
 
-  const TEMPLATE_URL = "sample_sheets/SampleOdooFormat.xlsx";
+  const MODES = {
+    categories: {
+      templateUrl: "sample_sheets/NewProductCateg.csv",
+      lede: "Two-step import — categories first, then products",
+      uploadHint: "Drop your supplier file here, or browse to upload",
+      loadedMessage: (rows) => `${rows} rows loaded — click Generate`,
+      processLabel: "Generate",
+      processingLabel: "Generating…",
+      successMessage: (count) => `${count} categories ready. Download Excel or CSV.`,
+      previewLabel: (count, previewLen) =>
+        previewLen < count ? `${previewLen} of ${count} rows` : `${count} rows`,
+      downloadSuffix: "_categories",
+      headersKey: "category_headers",
+    },
+    products: {
+      templateUrl: "sample_sheets/SampleOdooFormat.xlsx",
+      lede: "Two-step import — categories first, then products",
+      uploadHint: "Drop your supplier file here, or browse to upload",
+      loadedMessage: (rows) => `${rows} rows loaded — click Convert`,
+      processLabel: "Convert",
+      processingLabel: "Converting…",
+      successMessage: (count) => `${count} products ready. Download Excel or CSV.`,
+      previewLabel: (count, previewLen) =>
+        previewLen < count ? `${previewLen} of ${count} rows` : `${count} rows`,
+      downloadSuffix: "_odoo",
+      headersKey: "odoo_headers",
+    },
+  };
 
   const els = {
+    heroLede: document.getElementById("heroLede"),
+    tabProducts: document.getElementById("tabProducts"),
+    tabCategories: document.getElementById("tabCategories"),
+    uploadHint: document.getElementById("uploadHint"),
     dropZone: document.getElementById("dropZone"),
     fileInput: document.getElementById("fileInput"),
     uploadIdle: document.getElementById("uploadIdle"),
     uploadReady: document.getElementById("uploadReady"),
     fileName: document.getElementById("fileName"),
     fileMeta: document.getElementById("fileMeta"),
-    formatPill: document.getElementById("formatPill"),
+    fileBadge: document.getElementById("fileBadge"),
     messages: document.getElementById("messages"),
     actions: document.getElementById("actions"),
     btnProcess: document.getElementById("btnProcess"),
@@ -24,17 +55,32 @@
     previewWrap: document.getElementById("previewWrap"),
     previewCount: document.getElementById("previewCount"),
     previewTable: document.getElementById("previewTable"),
+    mappingProducts: document.getElementById("mappingProducts"),
+    mappingCategories: document.getElementById("mappingCategories"),
   };
 
+  function createEmptyModeState() {
+    return { file: null, rows: null, detectedFormat: null, result: null };
+  }
+
   const state = {
+    mode: "categories",
     pyodide: null,
     ready: false,
-    file: null,
-    detectedFormat: null,
-    rows: null,
-    result: null,
-    templateBytes: null,
+    byMode: {
+      categories: createEmptyModeState(),
+      products: createEmptyModeState(),
+    },
+    templateBytesByMode: {},
   };
+
+  function currentMode() {
+    return state.byMode[state.mode];
+  }
+
+  function modeConfig() {
+    return MODES[state.mode];
+  }
 
   function clearMessages() {
     els.messages.innerHTML = "";
@@ -68,6 +114,127 @@
     });
   }
 
+  function applyModeUI() {
+    const cfg = modeConfig();
+    els.heroLede.textContent = cfg.lede;
+    els.uploadHint.textContent = cfg.uploadHint;
+    els.btnProcess.textContent = cfg.processLabel;
+    els.tabCategories.classList.toggle("active", state.mode === "categories");
+    els.tabProducts.classList.toggle("active", state.mode === "products");
+    els.tabCategories.setAttribute("aria-selected", state.mode === "categories" ? "true" : "false");
+    els.tabProducts.setAttribute("aria-selected", state.mode === "products" ? "true" : "false");
+    els.mappingCategories.hidden = state.mode !== "categories";
+    els.mappingProducts.hidden = state.mode !== "products";
+  }
+
+  function initCollapsibles() {
+    document.querySelectorAll(".collapse").forEach((section) => {
+      const trigger = section.querySelector(".collapse-trigger");
+      const body = section.querySelector(".collapse-body");
+      if (!trigger || !body) return;
+
+      trigger.addEventListener("click", () => {
+        const expanded = trigger.getAttribute("aria-expanded") === "true";
+        trigger.setAttribute("aria-expanded", String(!expanded));
+        body.hidden = expanded;
+      });
+    });
+  }
+
+  function formatBadge(format) {
+    if (!format) return "FILE";
+    if (format.includes("xlsx")) return "XLSX";
+    if (format.includes("xls")) return "XLS";
+    return "CSV";
+  }
+
+  function clearAllModes() {
+    state.byMode.categories = createEmptyModeState();
+    state.byMode.products = createEmptyModeState();
+  }
+
+  function resetWorkflow() {
+    clearAllModes();
+    els.uploadIdle.hidden = false;
+    els.uploadReady.hidden = true;
+    els.actions.hidden = true;
+    els.previewWrap.hidden = true;
+    els.fileInput.value = "";
+    hideProgress();
+    clearMessages();
+    els.btnExcel.disabled = true;
+    els.btnCsv.disabled = true;
+    els.btnProcess.disabled = !state.ready;
+  }
+
+  function restoreModeWorkflow() {
+    const cfg = modeConfig();
+    const mode = currentMode();
+    hideProgress();
+    clearMessages();
+    els.btnProcess.textContent = cfg.processLabel;
+    els.fileInput.value = "";
+
+    if (!mode.file || !mode.rows) {
+      els.uploadIdle.hidden = false;
+      els.uploadReady.hidden = true;
+      els.actions.hidden = true;
+      els.previewWrap.hidden = true;
+      els.btnExcel.disabled = true;
+      els.btnCsv.disabled = true;
+      els.btnProcess.disabled = !state.ready;
+      return;
+    }
+
+    els.uploadIdle.hidden = true;
+    els.uploadReady.hidden = false;
+    els.actions.hidden = false;
+    if (els.fileBadge) els.fileBadge.textContent = formatBadge(mode.detectedFormat);
+    els.fileName.textContent = mode.file.name;
+    els.fileMeta.textContent = `${(mode.file.size / 1024).toFixed(1)} KB`;
+    els.btnProcess.disabled = !state.ready;
+
+    if (mode.result) {
+      renderPreview(mode.result);
+      els.btnExcel.disabled = false;
+      els.btnCsv.disabled = false;
+      showMessage("info", cfg.successMessage(mode.result.row_count));
+    } else {
+      els.previewWrap.hidden = true;
+      els.btnExcel.disabled = true;
+      els.btnCsv.disabled = true;
+      showMessage("info", cfg.loadedMessage(rowsLength(mode.rows)));
+    }
+  }
+
+  const SUPPORTED_FILE_RE = /\.(csv|xlsx|xls)$/i;
+
+  function unsupportedFileMessage(file) {
+    const name = file?.name || "This file";
+    const dot = name.lastIndexOf(".");
+    const ext = dot >= 0 ? name.slice(dot).toLowerCase() : "";
+    if (ext) {
+      return `Unsupported file type (${ext}). Please upload a .csv, .xlsx, or .xls spreadsheet.`;
+    }
+    return "Unsupported file type. Please upload a .csv, .xlsx, or .xls spreadsheet.";
+  }
+
+  function isSupportedFile(file) {
+    return Boolean(file && SUPPORTED_FILE_RE.test(file.name || ""));
+  }
+
+  function rejectUnsupportedFile(file) {
+    showMessage("error", unsupportedFileMessage(file));
+    els.fileInput.value = "";
+  }
+
+  function switchMode(mode) {
+    if (state.mode === mode) return;
+    state.mode = mode;
+    applyModeUI();
+    restoreModeWorkflow();
+  }
+
   function detectFormat(file) {
     const name = (file.name || "").toLowerCase();
     if (name.endsWith(".csv")) return "CSV";
@@ -79,22 +246,19 @@
     if (type.includes("spreadsheetml") || type.includes("openxmlformats")) return "Excel (.xlsx)";
     if (type === "application/vnd.ms-excel") return "Excel (.xls)";
 
-    // Fallback: inspect magic bytes later in parse
     return null;
   }
 
   function detectFormatFromBytes(bytes, fallbackName) {
     if (bytes.length >= 4) {
-      // ZIP / xlsx
       if (bytes[0] === 0x50 && bytes[1] === 0x4b) return "Excel (.xlsx)";
-      // OLE compound / xls
       if (bytes[0] === 0xd0 && bytes[1] === 0xcf && bytes[2] === 0x11 && bytes[3] === 0xe0) {
         return "Excel (.xls)";
       }
     }
     const name = (fallbackName || "").toLowerCase();
     if (name.endsWith(".csv")) return "CSV";
-    return "CSV";
+    return null;
   }
 
   function sheetToRows(workbook) {
@@ -112,6 +276,9 @@
     const buffer = await file.arrayBuffer();
     const bytes = new Uint8Array(buffer);
     let format = detectFormat(file) || detectFormatFromBytes(bytes, file.name);
+    if (!format) {
+      throw new Error("This file could not be read as a spreadsheet. Please upload a .csv, .xlsx, or .xls file.");
+    }
 
     let rows;
     if (format === "CSV") {
@@ -121,7 +288,6 @@
     } else {
       const workbook = XLSX.read(bytes, { type: "array", cellDates: true });
       rows = sheetToRows(workbook);
-      // Refine if extension lied
       format = detectFormatFromBytes(bytes, file.name) || format;
     }
 
@@ -129,54 +295,59 @@
   }
 
   function setFileUI(file, format) {
+    const cfg = modeConfig();
+    const mode = currentMode();
     els.uploadIdle.hidden = true;
     els.uploadReady.hidden = false;
     els.actions.hidden = false;
-    els.formatPill.hidden = false;
-    els.formatPill.textContent = `Detected: ${format}`;
+    if (els.fileBadge) els.fileBadge.textContent = formatBadge(format);
     els.fileName.textContent = file.name;
-    els.fileMeta.textContent = `${(file.size / 1024).toFixed(1)} KB · ${format}`;
+    els.fileMeta.textContent = `${(file.size / 1024).toFixed(1)} KB`;
     els.btnProcess.disabled = !state.ready;
     els.btnExcel.disabled = true;
     els.btnCsv.disabled = true;
     els.previewWrap.hidden = true;
     hideProgress();
-    state.result = null;
+    mode.result = null;
+    showMessage("info", cfg.loadedMessage(rowsLength(mode.rows)));
+  }
+
+  function rowsLength(rows) {
+    return Array.isArray(rows) ? rows.length : 0;
   }
 
   async function handleFile(file) {
     clearMessages();
     if (!file) return;
 
-    const allowed = /\.(csv|xlsx|xls)$/i.test(file.name);
-    if (!allowed) {
-      showMessage("error", "Please upload a .csv, .xlsx, or .xls file.");
+    if (!isSupportedFile(file)) {
+      rejectUnsupportedFile(file);
       return;
     }
 
     try {
       const { format, rows } = await parseFile(file);
-      state.file = file;
-      state.detectedFormat = format;
-      state.rows = rows;
+      const mode = currentMode();
+      mode.file = file;
+      mode.detectedFormat = format;
+      mode.rows = rows;
+      mode.result = null;
       setFileUI(file, format);
-      showMessage(
-        "info",
-        `Loaded ${rows.length} rows from ${format} file. Click “Convert to Odoo format” to map columns.`
-      );
     } catch (err) {
       console.error(err);
-      showMessage("error", `Failed to read file: ${err.message || err}`);
+      showMessage("error", err.message || String(err));
+      els.fileInput.value = "";
     }
   }
 
   function renderPreview(result) {
+    const cfg = modeConfig();
     const thead = els.previewTable.querySelector("thead");
     const tbody = els.previewTable.querySelector("tbody");
     thead.innerHTML = "";
     tbody.innerHTML = "";
 
-    const headers = result.odoo_headers || [];
+    const headers = result[cfg.headersKey] || [];
     const preview = result.preview || [];
 
     const hr = document.createElement("tr");
@@ -199,10 +370,7 @@
       tbody.appendChild(tr);
     });
 
-    els.previewCount.textContent =
-      result.row_count > preview.length
-        ? `Showing ${preview.length} of ${result.row_count} products`
-        : `${result.row_count} products`;
+    els.previewCount.textContent = cfg.previewLabel(result.row_count, preview.length);
     els.previewWrap.hidden = false;
   }
 
@@ -226,8 +394,9 @@
   }
 
   function downloadBaseName() {
-    const name = state.file?.name || "odoo_products";
-    const base = name.replace(/\.(csv|xlsx|xls)$/i, "") + "_odoo";
+    const cfg = modeConfig();
+    const name = currentMode().file?.name || "odoo_export";
+    const base = name.replace(/\.(csv|xlsx|xls)$/i, "") + cfg.downloadSuffix;
     const now = new Date();
     const pad = (n) => String(n).padStart(2, "0");
     const stamp =
@@ -236,65 +405,55 @@
     return `${base}_${stamp}`;
   }
 
-  async function processFile() {
-    clearMessages();
-    if (!state.ready || !state.rows) {
-      showMessage("error", "Wait for the Python engine to finish loading, then upload a file.");
-      return;
+  async function loadTemplateBytes() {
+    if (state.templateBytesByMode[state.mode]) {
+      return state.templateBytesByMode[state.mode];
     }
+    const cfg = modeConfig();
+    const resp = await fetch(cfg.templateUrl);
+    if (!resp.ok) throw new Error(`Could not load template (${resp.status})`);
+    const bytes = new Uint8Array(await resp.arrayBuffer());
+    state.templateBytesByMode[state.mode] = bytes;
+    return bytes;
+  }
 
-    els.btnProcess.disabled = true;
-    els.btnProcess.textContent = "Converting…";
-    els.btnExcel.disabled = true;
-    els.btnCsv.disabled = true;
-    setProgress(0);
+  async function processProducts(pyodide) {
+    const mode = currentMode();
+    const templateBytes = await loadTemplateBytes();
+    pyodide.FS.writeFile("/tmp/template.xlsx", templateBytes);
+    pyodide.globals.set("SUPPLIER_ROWS_JSON", JSON.stringify(mode.rows));
+    pyodide.globals.set("DETECTED_FORMAT", mode.detectedFormat);
+
+    setProgress(8);
     await tickUI();
-
-    try {
-      if (!state.templateBytes) {
-        setProgress(4);
-        await tickUI();
-        const resp = await fetch(TEMPLATE_URL);
-        if (!resp.ok) throw new Error(`Could not load Odoo template (${resp.status})`);
-        state.templateBytes = new Uint8Array(await resp.arrayBuffer());
-      }
-
-      const pyodide = state.pyodide;
-      pyodide.FS.writeFile("/tmp/template.xlsx", state.templateBytes);
-      pyodide.globals.set("SUPPLIER_ROWS_JSON", JSON.stringify(state.rows));
-      pyodide.globals.set("DETECTED_FORMAT", state.detectedFormat);
-
-      // Staged conversion so the progress % can paint between steps
-      setProgress(8);
-      await tickUI();
-      await pyodide.runPythonAsync(`
+    await pyodide.runPythonAsync(`
 import json, convert
 _rows = json.loads(SUPPLIER_ROWS_JSON)
 _headers, _records = convert.parse_supplier_rows(_rows)
 `);
 
-      setProgress(25);
-      await tickUI();
-      await pyodide.runPythonAsync(`
+    setProgress(25);
+    await tickUI();
+    await pyodide.runPythonAsync(`
 _odoo_headers, _mapped = convert.map_to_odoo(_headers, _records)
 `);
 
-      setProgress(40);
-      await tickUI();
-      await pyodide.runPythonAsync(`
+    setProgress(40);
+    await tickUI();
+    await pyodide.runPythonAsync(`
 _template = open("/tmp/template.xlsx", "rb").read()
 _xlsx_bytes = convert.build_xlsx_bytes(_template, _mapped)
 `);
 
-      setProgress(78);
-      await tickUI();
-      await pyodide.runPythonAsync(`
+    setProgress(78);
+    await tickUI();
+    await pyodide.runPythonAsync(`
 _csv_text = convert.build_csv_text(_odoo_headers, _mapped)
 `);
 
-      setProgress(90);
-      await tickUI();
-      const resultJson = await pyodide.runPythonAsync(`
+    setProgress(90);
+    await tickUI();
+    const resultJson = await pyodide.runPythonAsync(`
 import json, base64
 json.dumps({
     "ok": True,
@@ -307,8 +466,87 @@ json.dumps({
     "csv_text": _csv_text,
 })
 `);
+    return JSON.parse(resultJson);
+  }
 
-      const result = JSON.parse(resultJson);
+  async function processCategories(pyodide) {
+    const mode = currentMode();
+    const templateBytes = await loadTemplateBytes();
+    pyodide.FS.writeFile("/tmp/category_template.csv", templateBytes);
+    pyodide.globals.set("SUPPLIER_ROWS_JSON", JSON.stringify(mode.rows));
+    pyodide.globals.set("DETECTED_FORMAT", mode.detectedFormat);
+
+    setProgress(10);
+    await tickUI();
+    await pyodide.runPythonAsync(`
+import json, categories
+_rows = json.loads(SUPPLIER_ROWS_JSON)
+_headers, _records = categories.parse_category_source_rows(_rows)
+`);
+
+    setProgress(35);
+    await tickUI();
+    await pyodide.runPythonAsync(`
+_category_headers, _mapped = categories.build_category_records(_records)
+`);
+
+    setProgress(60);
+    await tickUI();
+    await pyodide.runPythonAsync(`
+_xlsx_bytes = categories.build_category_xlsx_bytes(_category_headers, _mapped)
+`);
+
+    setProgress(85);
+    await tickUI();
+    await pyodide.runPythonAsync(`
+_csv_text = categories.build_category_csv_text(_category_headers, _mapped)
+`);
+
+    setProgress(92);
+    await tickUI();
+    const resultJson = await pyodide.runPythonAsync(`
+import json, base64
+json.dumps({
+    "ok": True,
+    "detected_format": DETECTED_FORMAT,
+    "supplier_headers": _headers,
+    "row_count": len(_mapped),
+    "category_headers": _category_headers,
+    "preview": _mapped[:100],
+    "xlsx_base64": base64.b64encode(_xlsx_bytes).decode("ascii"),
+    "csv_text": _csv_text,
+})
+`);
+    return JSON.parse(resultJson);
+  }
+
+  async function processFile() {
+    const cfg = modeConfig();
+    const mode = currentMode();
+    clearMessages();
+    if (!state.ready || !mode.rows) {
+      showMessage("error", "Wait for the Python engine to finish loading, then upload a file.");
+      return;
+    }
+
+    els.btnProcess.disabled = true;
+    els.btnProcess.textContent = cfg.processingLabel;
+    els.btnExcel.disabled = true;
+    els.btnCsv.disabled = true;
+    setProgress(0);
+    await tickUI();
+
+    try {
+      setProgress(4);
+      await tickUI();
+      await loadTemplateBytes();
+
+      const pyodide = state.pyodide;
+      const result =
+        state.mode === "categories"
+          ? await processCategories(pyodide)
+          : await processProducts(pyodide);
+
       if (!result.ok) {
         throw new Error(result.error || "Conversion failed");
       }
@@ -316,17 +554,14 @@ json.dumps({
       setProgress(100);
       await tickUI();
 
-      state.result = result;
+      mode.result = result;
       renderPreview(result);
       els.btnExcel.disabled = false;
       els.btnCsv.disabled = false;
-      showMessage(
-        "info",
-        `Mapped ${result.row_count} products into the Odoo template. Choose Excel or CSV to download.`
-      );
+      showMessage("info", cfg.successMessage(result.row_count));
 
       setTimeout(() => {
-        if (state.result === result) hideProgress();
+        if (mode.result === result) hideProgress();
       }, 700);
     } catch (err) {
       console.error(err);
@@ -338,7 +573,7 @@ json.dumps({
       hideProgress();
     } finally {
       els.btnProcess.disabled = false;
-      els.btnProcess.textContent = "Convert to Odoo format";
+      els.btnProcess.textContent = cfg.processLabel;
     }
   }
 
@@ -352,19 +587,27 @@ json.dumps({
 import micropip
 await micropip.install("openpyxl")
 `);
-      const pyCode = await fetch("static/convert.py?v=" + Date.now()).then((r) => {
-        if (!r.ok) throw new Error("Could not load convert.py");
-        return r.text();
-      });
-      pyodide.FS.writeFile("/home/pyodide/convert.py", pyCode);
+      const [convertCode, categoriesCode] = await Promise.all([
+        fetch("static/convert.py?v=" + Date.now()).then((r) => {
+          if (!r.ok) throw new Error("Could not load convert.py");
+          return r.text();
+        }),
+        fetch("static/categories.py?v=" + Date.now()).then((r) => {
+          if (!r.ok) throw new Error("Could not load categories.py");
+          return r.text();
+        }),
+      ]);
+      pyodide.FS.writeFile("/home/pyodide/convert.py", convertCode);
+      pyodide.FS.writeFile("/home/pyodide/categories.py", categoriesCode);
       await pyodide.runPythonAsync(`
 import sys
 sys.path.insert(0, "/home/pyodide")
 import convert
+import categories
 `);
       state.pyodide = pyodide;
       state.ready = true;
-      if (state.file) els.btnProcess.disabled = false;
+      if (currentMode().file) els.btnProcess.disabled = false;
     } catch (err) {
       console.error(err);
       showMessage(
@@ -374,7 +617,9 @@ import convert
     }
   }
 
-  // Events
+  els.tabCategories.addEventListener("click", () => switchMode("categories"));
+  els.tabProducts.addEventListener("click", () => switchMode("products"));
+
   els.fileInput.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     handleFile(file);
@@ -400,19 +645,23 @@ import convert
   els.btnProcess.addEventListener("click", processFile);
 
   els.btnExcel.addEventListener("click", () => {
-    if (!state.result?.xlsx_base64) return;
+    const result = currentMode().result;
+    if (!result?.xlsx_base64) return;
     const blob = base64ToBlob(
-      state.result.xlsx_base64,
+      result.xlsx_base64,
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
     downloadBlob(blob, `${downloadBaseName()}.xlsx`);
   });
 
   els.btnCsv.addEventListener("click", () => {
-    if (!state.result?.csv_text) return;
-    const blob = new Blob([state.result.csv_text], { type: "text/csv;charset=utf-8" });
+    const result = currentMode().result;
+    if (!result?.csv_text) return;
+    const blob = new Blob([result.csv_text], { type: "text/csv;charset=utf-8" });
     downloadBlob(blob, `${downloadBaseName()}.csv`);
   });
 
+  applyModeUI();
+  initCollapsibles();
   initPyodide();
 })();

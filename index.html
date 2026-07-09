@@ -7,82 +7,97 @@
   <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="static/styles.css" />
 </head>
 <body>
   <div class="page">
-    <header class="hero">
-      <h1>Odoo Excel Conversion</h1>
-      <p class="lede">
-        Upload a supplier product sheet, map it to the Odoo import template, and download Excel or CSV.
-      </p>
+    <header class="topbar">
+      <div class="brand">
+        <img src="static/favicon.svg" alt="" class="brand-icon" width="32" height="32" />
+        <div>
+          <div class="brand-title">
+            <h1>Odoo Excel Conversion</h1>
+            <span class="badge-browser">Browser-based</span>
+          </div>
+          <p id="heroLede">Convert supplier sheets to Odoo import files</p>
+        </div>
+      </div>
     </header>
 
-    <main class="stack">
-      <section class="card upload-zone" id="dropZone">
-        <div class="upload-idle" id="uploadIdle">
-          <div class="upload-icon" aria-hidden="true">
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+    <main class="workspace card">
+      <section class="upload" id="dropZone">
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
+
+        <div class="upload-steps-wrap">
+          <div class="upload-steps" role="tablist" aria-label="Choose what to create">
+            <button type="button" role="tab" class="upload-step active" data-mode="categories" id="tabCategories" aria-selected="true">
+              <span class="upload-step-num">1</span>
+              <span class="upload-step-text">
+                <strong>Categories</strong>
+                <span>Odoo category file</span>
+              </span>
+            </button>
+            <span class="upload-steps-arrow" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <button type="button" role="tab" class="upload-step" data-mode="products" id="tabProducts" aria-selected="false">
+              <span class="upload-step-num">2</span>
+              <span class="upload-step-text">
+                <strong>Products</strong>
+                <span>Odoo product file</span>
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <div class="upload-empty" id="uploadIdle">
+          <div class="upload-graphic" aria-hidden="true">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
               <path d="M12 16V4m0 0l-4 4m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
               <path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4" stroke-linecap="round"/>
             </svg>
           </div>
-          <div class="upload-copy">
-            <h2>Upload supplier file</h2>
-            <p>CSV, Excel (.xlsx), or Excel (.xls). Format is detected automatically.</p>
-          </div>
-          <label class="btn primary" for="fileInput">Browse files</label>
+          <p class="upload-lead" id="uploadHint">Drop your supplier file here, or browse to upload</p>
+          <p class="upload-sub">CSV, XLSX, or XLS</p>
+          <label class="btn btn-primary" for="fileInput">Choose file</label>
         </div>
 
-        <div class="upload-ready" id="uploadReady" hidden>
-          <div class="file-chip">
-            <span class="file-icon" aria-hidden="true">📄</span>
-            <div class="file-meta">
+        <div class="upload-selected" id="uploadReady" hidden>
+          <div class="file-row">
+            <div class="file-badge" id="fileBadge" aria-hidden="true">CSV</div>
+            <div class="file-info">
               <strong id="fileName">—</strong>
-              <span id="fileMeta">No file selected</span>
+              <span id="fileMeta">—</span>
             </div>
-          </div>
-          <div class="upload-ready-actions">
-            <div class="status-pill" id="formatPill" hidden></div>
-            <label class="btn ghost" for="fileInput">Change file</label>
+            <label class="btn btn-outline" for="fileInput">Change file</label>
           </div>
         </div>
-
-        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
       </section>
+
+      <section class="toolbar" id="actions" hidden>
+        <button type="button" class="btn btn-primary" id="btnProcess" disabled>Generate</button>
+        <div class="toolbar-right">
+          <button type="button" class="btn btn-outline" id="btnExcel" disabled>Download Excel (.xlsx)</button>
+          <button type="button" class="btn btn-outline" id="btnCsv" disabled>Download CSV (.csv)</button>
+        </div>
+      </section>
+
+      <div class="progress" id="progress" hidden role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+        <span class="progress-pct" id="progressPct">0%</span>
+      </div>
 
       <section class="messages" id="messages" aria-live="polite"></section>
 
-      <section class="card actions-card" id="actions" hidden>
-        <div class="actions">
-          <button type="button" class="btn primary" id="btnProcess" disabled>Convert to Odoo format</button>
-          <button type="button" class="btn secondary" id="btnExcel" disabled>Download Excel (.xlsx)</button>
-          <button type="button" class="btn secondary" id="btnCsv" disabled>Download CSV (.csv)</button>
-        </div>
-        <div
-          class="progress"
-          id="progress"
-          hidden
-          role="progressbar"
-          aria-valuemin="0"
-          aria-valuemax="100"
-          aria-valuenow="0"
-          aria-label="Conversion progress"
-        >
-          <div class="progress-track" aria-hidden="true">
-            <div class="progress-fill" id="progressFill"></div>
-          </div>
-          <div class="progress-pct" id="progressPct">0%</div>
-        </div>
-      </section>
-
-      <section class="card preview-wrap" id="previewWrap" hidden>
-        <div class="preview-head">
+      <section class="preview" id="previewWrap" hidden>
+        <div class="preview-top">
           <h2>Preview</h2>
           <span id="previewCount"></span>
         </div>
-        <div class="table-scroll">
+        <div class="table-wrap">
           <table id="previewTable">
             <thead></thead>
             <tbody></tbody>
@@ -90,26 +105,49 @@
         </div>
       </section>
 
-      <section class="card mapping">
-        <h2>Column mapping</h2>
-        <div class="map-grid">
-          <div><span>Name</span><em>→</em><strong>Name</strong></div>
-          <div><span>Barcode</span><em>→</em><strong>Barcode</strong></div>
-          <div><span>Cost/Case</span><em>→</em><strong>Cost</strong></div>
-          <div><span>Selling Price</span><em>→</em><strong>Sales Price</strong></div>
-          <div><span>PLU</span><em>→</em><strong>Internal Reference</strong></div>
-          <div><span>Markup</span><em>→</em><strong>Markup %</strong></div>
-          <div><span>VAT (%)</span><em>→</em><strong>VAT %</strong></div>
-          <div><span>static</span><em>→</em><strong>Track Inventory = 1</strong></div>
-          <div><span>static</span><em>→</em><strong>Product Category = All</strong></div>
-          <div><span>static</span><em>→</em><strong>Exclude from API Sync = TRUE</strong></div>
+      <section class="collapse" id="mappingCategories">
+        <button type="button" class="collapse-trigger" aria-expanded="false" aria-controls="mappingCategoriesBody">
+          <span>Category mapping</span>
+          <svg class="collapse-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="collapse-body" id="mappingCategoriesBody" hidden>
+          <div class="map-grid">
+            <div><span>Department</span><em>→</em><strong>Parent category</strong></div>
+            <div><span>Sub-Department</span><em>→</em><strong>Child category</strong></div>
+            <div><span>generated</span><em>→</em><strong>External ID</strong></div>
+            <div><span>parent link</span><em>→</em><strong>Parent Category / External ID</strong></div>
+          </div>
+          <p class="mapping-note">Duplicates removed. Parents listed before children.</p>
+        </div>
+      </section>
+
+      <section class="collapse" id="mappingProducts" hidden>
+        <button type="button" class="collapse-trigger" aria-expanded="false" aria-controls="mappingProductsBody">
+          <span>Column mapping</span>
+          <svg class="collapse-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="collapse-body" id="mappingProductsBody" hidden>
+          <div class="map-grid">
+            <div><span>Name</span><em>→</em><strong>Name</strong></div>
+            <div><span>Barcode</span><em>→</em><strong>Barcode</strong></div>
+            <div><span>Cost/Case</span><em>→</em><strong>Cost</strong></div>
+            <div><span>Selling Price</span><em>→</em><strong>Sales Price</strong></div>
+            <div><span>PLU</span><em>→</em><strong>Internal Reference</strong></div>
+            <div><span>Markup</span><em>→</em><strong>Markup %</strong></div>
+            <div><span>VAT (%)</span><em>→</em><strong>VAT %</strong></div>
+            <div><span>static</span><em>→</em><strong>Track Inventory = 1</strong></div>
+            <div><span>static</span><em>→</em><strong>Product Category = All</strong></div>
+            <div><span>static</span><em>→</em><strong>Exclude from API Sync = TRUE</strong></div>
+          </div>
         </div>
       </section>
     </main>
 
-    <footer class="footer">
-      
-    </footer>
+    <footer class="footer">Browser-based — your files never leave your device.</footer>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>

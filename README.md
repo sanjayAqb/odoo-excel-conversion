@@ -17,17 +17,39 @@ Browser-based tool that converts supplier product Excel/CSV files into a predefi
 - Progress bar with percentage during conversion
 - Validates required supplier columns with clear error messages
 
-## How it works
+## How it works (Phase 2)
 
-1. Open the app in a modern browser.
-2. Browse or drag-and-drop a supplier product sheet.
+The app has two steps. Run them in order:
+
+### Step 1: Product Category
+1. Select **Step 1: Product Category**.
+2. Upload the supplier product sheet.
+3. Click **Generate category file**.
+4. Download the category import file (Excel or CSV).
+5. Import categories into Odoo first.
+
+### Step 2: Product
+1. Select **Step 2: Product**.
+2. Upload the same (or updated) supplier product sheet.
 3. Click **Convert to Odoo format**.
-4. Review the preview.
-5. Download Excel or CSV.
+4. Review the preview and download the product import file.
 
 Processing uses **SheetJS** for file parsing and **Python (Pyodide + openpyxl)** for mapping and Excel generation — all client-side.
 
-## Column mapping
+## Step 1: Product Category mapping
+
+| Supplier column | Output |
+|-----------------|--------|
+| Department | Parent category (`Category Name`) |
+| Sub-Department | Child category (`Category Name`) |
+| generated | `External ID` (e.g. `cat_nicotine_pouch` from “NICOTINE POUCH”) |
+| parent link | `Parent Category / External ID` (empty for parents) |
+
+- Duplicate categories are removed automatically.
+- Parent categories are listed before child categories.
+- Output template: `sample_sheets/NewProductCateg.csv`
+
+## Step 2: Product column mapping
 
 | Supplier column | Odoo template column |
 |-----------------|----------------------|
@@ -57,12 +79,13 @@ odoo-excel-conversion/
 ├── vercel.json             # Vercel static site config
 ├── static/
 │   ├── app.js              # Upload, conversion flow, downloads
-│   ├── convert.py          # Mapping and file generation (Pyodide)
+│   ├── convert.py          # Product mapping and file generation (Pyodide)
+│   ├── categories.py       # Step 1: product category extraction
 │   ├── styles.css
 │   └── favicon.svg
 └── sample_sheets/
-    ├── SampleOdooFormat.xlsx           # Odoo import template
-    └── NICOTIN POUCH PRODUCT LIST.csv  # Sample supplier file
+    ├── SampleOdooFormat.xlsx           # Odoo product import template
+    └── NewProductCateg.csv             # Odoo category import template
 ```
 
 ## Run locally
@@ -138,7 +161,8 @@ git push
 Use the files in `sample_sheets/` to test:
 
 - **Input:** `NICOTIN POUCH PRODUCT LIST.csv`
-- **Template:** `SampleOdooFormat.xlsx`
+- **Step 1 template:** `NewProductCateg.csv`
+- **Step 2 template:** `SampleOdooFormat.xlsx`
 
 ## License
 
