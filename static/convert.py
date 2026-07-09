@@ -161,6 +161,7 @@ def map_to_odoo(headers: list[str], records: list[dict[str, Any]]) -> tuple[list
         "Brand Name",
         "Gross Margin %",
         "U Cost Price",
+        "Exclude from API Sync",
     ]
 
     # Prefer specific % / price columns when ambiguous headers exist (e.g. VAT(%) vs VAT).
@@ -191,6 +192,7 @@ def map_to_odoo(headers: list[str], records: list[dict[str, Any]]) -> tuple[list
         # Static Odoo defaults (not sourced from supplier sheet)
         out["Track Inventory"] = 1
         out["Product Category"] = "All"
+        out["Exclude from API Sync"] = "TRUE"
         mapped.append(out)
     return odoo_headers, mapped
 
@@ -278,6 +280,7 @@ def build_xlsx_bytes(
         "VAT %",
         "Track Inventory",
         "Product Category",
+        "Exclude from API Sync",
     }
 
     total = max(len(mapped_rows), 1)

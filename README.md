@@ -45,6 +45,7 @@ Processing uses **SheetJS** for file parsing and **Python (Pyodide + openpyxl)**
 |-------------|-------|
 | Track Inventory | `1` |
 | Product Category | `All` |
+| Exclude from API Sync | `TRUE` |
 
 All other Odoo template columns are left unchanged in structure; only the mapped fields and static values above are populated.
 
