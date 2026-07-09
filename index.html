@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Odoo Excel Conversion</title>
+  <link rel="icon" href="static/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="static/styles.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="hero">
+      <h1>Odoo Excel Conversion</h1>
+      <p class="lede">
+        Upload a supplier product sheet, map it to the Odoo import template, and download Excel or CSV.
+      </p>
+    </header>
+
+    <main class="stack">
+      <section class="card upload-zone" id="dropZone">
+        <div class="upload-idle" id="uploadIdle">
+          <div class="upload-icon" aria-hidden="true">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M12 16V4m0 0l-4 4m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="upload-copy">
+            <h2>Upload supplier file</h2>
+            <p>CSV, Excel (.xlsx), or Excel (.xls). Format is detected automatically.</p>
+          </div>
+          <label class="btn primary" for="fileInput">Browse files</label>
+        </div>
+
+        <div class="upload-ready" id="uploadReady" hidden>
+          <div class="file-chip">
+            <span class="file-icon" aria-hidden="true">📄</span>
+            <div class="file-meta">
+              <strong id="fileName">—</strong>
+              <span id="fileMeta">No file selected</span>
+            </div>
+          </div>
+          <div class="upload-ready-actions">
+            <div class="status-pill" id="formatPill" hidden></div>
+            <label class="btn ghost" for="fileInput">Change file</label>
+          </div>
+        </div>
+
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
+      </section>
+
+      <section class="messages" id="messages" aria-live="polite"></section>
+
+      <section class="card actions-card" id="actions" hidden>
+        <div class="actions">
+          <button type="button" class="btn primary" id="btnProcess" disabled>Convert to Odoo format</button>
+          <button type="button" class="btn secondary" id="btnExcel" disabled>Download Excel (.xlsx)</button>
+          <button type="button" class="btn secondary" id="btnCsv" disabled>Download CSV (.csv)</button>
+        </div>
+        <div
+          class="progress"
+          id="progress"
+          hidden
+          role="progressbar"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="0"
+          aria-label="Conversion progress"
+        >
+          <div class="progress-track" aria-hidden="true">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <div class="progress-pct" id="progressPct">0%</div>
+        </div>
+      </section>
+
+      <section class="card preview-wrap" id="previewWrap" hidden>
+        <div class="preview-head">
+          <h2>Preview</h2>
+          <span id="previewCount"></span>
+        </div>
+        <div class="table-scroll">
+          <table id="previewTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card mapping">
+        <h2>Column mapping</h2>
+        <div class="map-grid">
+          <div><span>Name</span><em>→</em><strong>Name</strong></div>
+          <div><span>Barcode</span><em>→</em><strong>Barcode</strong></div>
+          <div><span>Cost/Case</span><em>→</em><strong>Cost</strong></div>
+          <div><span>Selling Price</span><em>→</em><strong>Sales Price</strong></div>
+          <div><span>PLU</span><em>→</em><strong>Internal Reference</strong></div>
+          <div><span>Markup</span><em>→</em><strong>Markup %</strong></div>
+          <div><span>VAT (%)</span><em>→</em><strong>VAT %</strong></div>
+          <div><span>static</span><em>→</em><strong>Track Inventory = 1</strong></div>
+          <div><span>static</span><em>→</em><strong>Product Category = All</strong></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      
+    </footer>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.27.5/full/pyodide.js"></script>
+  <script src="static/app.js"></script>
+</body>
+</html>
