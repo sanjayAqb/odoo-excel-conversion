@@ -24,6 +24,150 @@ REQUIRED_SUPPLIER_KEYS = [
     "vat",
 ]
 
+ODOO_CATEGORY_REQUIRED = {
+    "parent category/category name": "Parent Category/Category Name",
+    "category name": "Category Name",
+    "external id": "External ID",
+}
+
+
+def _clean_name(value: Any) -> str:
+    if value is None:
+        return ""
+    return re.sub(r"\s+", " ", str(value)).strip()
+
+
+def _normalize_header(value: Any) -> str:
+    text = _clean_name(value).lower()
+    text = re.sub(r"\s*/\s*", "/", text)
+    text = re.sub(r"\s+", " ", text)
+    return text
+
+
+def _looks_like_odoo_category_header(cells: list[Any]) -> bool:
+    normalized = {_normalize_header(c) for c in cells if _normalize_header(c)}
+    return "category name" in normalized and "external id" in normalized
+
+
+def _resolve_odoo_category_columns(headers: list[str]) -> dict[str, str]:
+    by_norm = {_normalize_header(h): h for h in headers if _normalize_header(h)}
+    resolved: dict[str, str] = {}
+    for norm_key, label in ODOO_CATEGORY_REQUIRED.items():
+        if norm_key in by_norm:
+            resolved[norm_key] = by_norm[norm_key]
+    return resolved
+
+
+def detect_odoo_category_header_row(rows: list[list[Any]]) -> int:
+    for idx, row in enumerate(rows[:20]):
+        if _looks_like_odoo_category_header(row):
+            return idx
+    raise ValueError(
+        "Could not find a header row in the Odoo category export. "
+        "The file must contain: Parent Category/Category Name, Category Name, External ID."
+    )
+
+
+def parse_odoo_category_export(rows: list[list[Any]]) -> tuple[list[str], list[dict[str, Any]]]:
+    if not rows:
+        raise ValueError("The Odoo category export file is empty.")
+
+    header_idx = detect_odoo_category_header_row(rows)
+    raw_headers = rows[header_idx]
+    headers: list[str] = []
+    for i, h in enumerate(raw_headers):
+        label = str(h).strip() if h is not None else ""
+        headers.append(label or f"Column_{i + 1}")
+
+    resolved = _resolve_odoo_category_columns(headers)
+    missing = [label for key, label in ODOO_CATEGORY_REQUIRED.items() if key not in resolved]
+    if missing:
+        raise ValueError(
+            "The uploaded category file is missing required column(s): "
+            + ", ".join(missing)
+            + ". The file must contain: Parent Category/Category Name, Category Name, External ID."
+        )
+
+    parent_col = resolved["parent category/category name"]
+    name_col = resolved["category name"]
+    external_col = resolved["external id"]
+
+    records: list[dict[str, Any]] = []
+    for row in rows[header_idx + 1 :]:
+        if not row or all(c is None or str(c).strip() == "" for c in row):
+            continue
+
+        record: dict[str, Any] = {}
+        for i, header in enumerate(headers):
+            val = row[i] if i < len(row) else None
+            record[header] = "" if val is None else val
+
+        if not _clean_name(record.get(name_col, "")):
+            continue
+        if not _clean_name(record.get(external_col, "")):
+            continue
+
+        records.append(
+            {
+                parent_col: _clean_name(record.get(parent_col, "")),
+                name_col: _clean_name(record.get(name_col, "")),
+                external_col: _clean_name(record.get(external_col, "")),
+            }
+        )
+
+    if not records:
+        raise ValueError("No category rows found in the Odoo category export file.")
+
+    return headers, records
+
+
+def build_category_lookups(
+    headers: list[str],
+    records: list[dict[str, Any]],
+) -> dict[str, Any]:
+    resolved = _resolve_odoo_category_columns(headers)
+    parent_col = resolved["parent category/category name"]
+    name_col = resolved["category name"]
+    external_col = resolved["external id"]
+
+    parent_lookup: dict[str, str] = {}
+    child_lookup: dict[tuple[str, str], str] = {}
+
+    for record in records:
+        parent_name = _clean_name(record.get(parent_col, ""))
+        category_name = _clean_name(record.get(name_col, ""))
+        external_id = _clean_name(record.get(external_col, ""))
+        if not category_name or not external_id:
+            continue
+        if parent_name:
+            child_lookup[(_normalize(parent_name), _normalize(category_name))] = external_id
+        else:
+            parent_lookup[_normalize(category_name)] = external_id
+
+    return {
+        "parent_lookup": parent_lookup,
+        "child_lookup": child_lookup,
+    }
+
+
+def resolve_pos_category_external_id(
+    department: str,
+    sub_department: str,
+    lookups: dict[str, Any],
+) -> str:
+    dept = _clean_name(department)
+    sub = _clean_name(sub_department)
+    parent_lookup = lookups.get("parent_lookup", {})
+    child_lookup = lookups.get("child_lookup", {})
+
+    if sub:
+        return child_lookup.get((_normalize(dept), _normalize(sub)), "")
+
+    if dept:
+        return parent_lookup.get(_normalize(dept), "")
+
+    return ""
+
 
 def _normalize(value: Any) -> str:
     if value is None:
@@ -146,7 +290,11 @@ def _pick_source_header(headers: list[str], preferred_keys: list[str]) -> str | 
     return None
 
 
-def map_to_odoo(headers: list[str], records: list[dict[str, Any]]) -> tuple[list[str], list[dict[str, Any]]]:
+def map_to_odoo(
+    headers: list[str],
+    records: list[dict[str, Any]],
+    category_lookups: dict[str, Any] | None = None,
+) -> tuple[list[str], list[dict[str, Any]]]:
     odoo_headers = [
         "Name",
         "Internal Reference",
@@ -181,6 +329,9 @@ def map_to_odoo(headers: list[str], records: list[dict[str, Any]]) -> tuple[list
         if chosen:
             source_for_odoo[odoo_field] = chosen
 
+    dept_col = _pick_source_header(headers, ["department"])
+    sub_col = _pick_source_header(headers, ["sub-department"])
+
     mapped: list[dict[str, Any]] = []
     for record in records:
         out: dict[str, Any] = {h: "" for h in odoo_headers}
@@ -193,6 +344,12 @@ def map_to_odoo(headers: list[str], records: list[dict[str, Any]]) -> tuple[list
         out["Track Inventory"] = 1
         out["Product Category"] = "All"
         out["Exclude from API Sync"] = "TRUE"
+        if category_lookups:
+            dept = record.get(dept_col, "") if dept_col else ""
+            sub = record.get(sub_col, "") if sub_col else ""
+            out["Point of Sale Category / External ID"] = resolve_pos_category_external_id(
+                dept, sub, category_lookups
+            )
         mapped.append(out)
     return odoo_headers, mapped
 
@@ -281,6 +438,7 @@ def build_xlsx_bytes(
         "Track Inventory",
         "Product Category",
         "Exclude from API Sync",
+        "Point of Sale Category / External ID",
     }
 
     total = max(len(mapped_rows), 1)

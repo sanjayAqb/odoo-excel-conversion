@@ -147,6 +147,10 @@ def build_category_records(
     dept_external: dict[str, str] = {}
     mapped: list[dict[str, Any]] = []
 
+    children_by_dept: dict[str, list[str]] = {}
+    for dept, sub in child_pairs:
+        children_by_dept.setdefault(dept, []).append(sub)
+
     for dept in sorted(departments):
         external_id = make_external_id(dept, used_ids)
         dept_external[dept] = external_id
@@ -158,18 +162,16 @@ def build_category_records(
             }
         )
 
-    for dept, sub in sorted(child_pairs):
-        parent_external = dept_external.get(dept)
-        if not parent_external:
-            continue
-        external_id = make_external_id(sub, used_ids, parent_name=dept)
-        mapped.append(
-            {
-                "External ID": external_id,
-                "Category Name": sub,
-                "Parent Category / External ID": parent_external,
-            }
-        )
+        parent_external = dept_external[dept]
+        for sub in sorted(children_by_dept.get(dept, [])):
+            external_id = make_external_id(sub, used_ids, parent_name=dept)
+            mapped.append(
+                {
+                    "External ID": external_id,
+                    "Category Name": sub,
+                    "Parent Category / External ID": parent_external,
+                }
+            )
 
     return CATEGORY_HEADERS, mapped
 

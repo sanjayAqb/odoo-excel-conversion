@@ -20,16 +20,32 @@
     products: {
       templateUrl: "sample_sheets/SampleOdooFormat.xlsx",
       lede: "Two-step import — categories first, then products",
-      uploadHint: "Drop your supplier file here, or browse to upload",
-      loadedMessage: (rows) => `${rows} rows loaded — click Convert`,
+      uploadHint: "Drop your supplier product file here, or browse to upload",
+      loadedMessage: (rows) => `${rows} product rows loaded — upload Odoo category export, then Convert`,
+      supplierReadyMessage: (rows) => `${rows} product rows loaded — now upload the Odoo category export (File 2)`,
+      categoryReadyMessage: "Category export validated — click Convert",
       processLabel: "Convert",
       processingLabel: "Converting…",
-      successMessage: (count) => `${count} products ready. Download Excel or CSV.`,
+      successMessage: (count) => `${count} products ready. Download Product Excel or CSV.`,
       previewLabel: (count, previewLen) =>
         previewLen < count ? `${previewLen} of ${count} rows` : `${count} rows`,
       downloadSuffix: "_odoo",
       headersKey: "odoo_headers",
+      excelLabel: "Download Product Excel (.xlsx)",
+      csvLabel: "Download Product CSV (.csv)",
     },
+  };
+
+  const CATEGORY_REQUIRED = [
+    "parent category/category name",
+    "category name",
+    "external id",
+  ];
+
+  const CATEGORY_REQUIRED_LABELS = {
+    "parent category/category name": "Parent Category/Category Name",
+    "category name": "Category Name",
+    "external id": "External ID",
   };
 
   const els = {
@@ -57,10 +73,27 @@
     previewTable: document.getElementById("previewTable"),
     mappingProducts: document.getElementById("mappingProducts"),
     mappingCategories: document.getElementById("mappingCategories"),
+    supplierFileLabel: document.getElementById("supplierFileLabel"),
+    categoryUpload: document.getElementById("categoryUpload"),
+    categoryFileInput: document.getElementById("categoryFileInput"),
+    categoryDropZone: document.getElementById("categoryDropZone"),
+    categoryUploadIdle: document.getElementById("categoryUploadIdle"),
+    categoryUploadReady: document.getElementById("categoryUploadReady"),
+    categoryFileBadge: document.getElementById("categoryFileBadge"),
+    categoryFileName: document.getElementById("categoryFileName"),
+    categoryFileMeta: document.getElementById("categoryFileMeta"),
   };
 
-  function createEmptyModeState() {
-    return { file: null, rows: null, detectedFormat: null, result: null };
+  function createEmptyModeState(forProducts = false) {
+    const base = { file: null, rows: null, detectedFormat: null, result: null };
+    if (!forProducts) return base;
+    return {
+      ...base,
+      categoryFile: null,
+      categoryRows: null,
+      categoryFormat: null,
+      categoryValid: false,
+    };
   }
 
   const state = {
@@ -68,8 +101,8 @@
     pyodide: null,
     ready: false,
     byMode: {
-      categories: createEmptyModeState(),
-      products: createEmptyModeState(),
+      categories: createEmptyModeState(false),
+      products: createEmptyModeState(true),
     },
     templateBytesByMode: {},
   };
@@ -114,6 +147,96 @@
     });
   }
 
+  function normalizeHeader(value) {
+    return String(value ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s*\/\s*/g, "/")
+      .replace(/\s+/g, " ");
+  }
+
+  function validateCategoryRows(rows) {
+    if (!rows?.length) {
+      throw new Error("The Odoo category export file is empty.");
+    }
+
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(rows.length, 20); i++) {
+      const norms = new Set(rows[i].map(normalizeHeader).filter(Boolean));
+      if (norms.has("category name") && norms.has("external id")) {
+        headerIdx = i;
+        break;
+      }
+    }
+
+    if (headerIdx < 0) {
+      throw new Error(
+        "Could not find required headers. The file must contain: Parent Category/Category Name, Category Name, External ID."
+      );
+    }
+
+    const norms = new Set(rows[headerIdx].map(normalizeHeader).filter(Boolean));
+    const missing = CATEGORY_REQUIRED.filter((key) => !norms.has(key));
+    if (missing.length) {
+      throw new Error(
+        `The uploaded category file is missing required column(s): ${missing
+          .map((key) => CATEGORY_REQUIRED_LABELS[key])
+          .join(", ")}. The file must contain: Parent Category/Category Name, Category Name, External ID.`
+      );
+    }
+
+    return true;
+  }
+
+  function canProcess(modeName = state.mode) {
+    const mode = state.byMode[modeName];
+    if (!state.ready || !mode?.rows) return false;
+    if (modeName === "products") {
+      return Boolean(mode.categoryValid && mode.categoryRows);
+    }
+    return true;
+  }
+
+  function updateDownloadLabels() {
+    const cfg = modeConfig();
+    if (state.mode === "products") {
+      els.btnExcel.textContent = cfg.excelLabel || "Download Product Excel (.xlsx)";
+      els.btnCsv.textContent = cfg.csvLabel || "Download Product CSV (.csv)";
+    } else {
+      els.btnExcel.textContent = "Download Excel (.xlsx)";
+      els.btnCsv.textContent = "Download CSV (.csv)";
+    }
+  }
+
+  function updateProductsPanels() {
+    const isProducts = state.mode === "products";
+    els.supplierFileLabel.hidden = !isProducts;
+    els.categoryUpload.hidden = !isProducts;
+
+    if (!isProducts) return;
+
+    const mode = currentMode();
+    els.categoryUploadIdle.hidden = Boolean(mode.categoryFile);
+    els.categoryUploadReady.hidden = !mode.categoryFile;
+
+    if (mode.categoryFile) {
+      els.categoryFileBadge.textContent = formatBadge(mode.categoryFormat);
+      els.categoryFileName.textContent = mode.categoryFile.name;
+      els.categoryFileMeta.textContent = `${(mode.categoryFile.size / 1024).toFixed(1)} KB`;
+    }
+  }
+
+  function productsStatusMessage(mode) {
+    const cfg = MODES.products;
+    if (mode.result) return cfg.successMessage(mode.result.row_count);
+    if (mode.rows && mode.categoryValid) return cfg.categoryReadyMessage;
+    if (mode.rows) return cfg.supplierReadyMessage(rowsLength(mode.rows));
+    return cfg.uploadHint;
+  }
+
+  function refreshProcessButton() {
+    els.btnProcess.disabled = !canProcess();
+  }
   function applyModeUI() {
     const cfg = modeConfig();
     els.heroLede.textContent = cfg.lede;
@@ -125,6 +248,8 @@
     els.tabProducts.setAttribute("aria-selected", state.mode === "products" ? "true" : "false");
     els.mappingCategories.hidden = state.mode !== "categories";
     els.mappingProducts.hidden = state.mode !== "products";
+    updateDownloadLabels();
+    updateProductsPanels();
   }
 
   function initCollapsibles() {
@@ -149,8 +274,8 @@
   }
 
   function clearAllModes() {
-    state.byMode.categories = createEmptyModeState();
-    state.byMode.products = createEmptyModeState();
+    state.byMode.categories = createEmptyModeState(false);
+    state.byMode.products = createEmptyModeState(true);
   }
 
   function resetWorkflow() {
@@ -160,11 +285,13 @@
     els.actions.hidden = true;
     els.previewWrap.hidden = true;
     els.fileInput.value = "";
+    if (els.categoryFileInput) els.categoryFileInput.value = "";
     hideProgress();
     clearMessages();
     els.btnExcel.disabled = true;
     els.btnCsv.disabled = true;
-    els.btnProcess.disabled = !state.ready;
+    updateProductsPanels();
+    refreshProcessButton();
   }
 
   function restoreModeWorkflow() {
@@ -174,6 +301,8 @@
     clearMessages();
     els.btnProcess.textContent = cfg.processLabel;
     els.fileInput.value = "";
+    if (els.categoryFileInput) els.categoryFileInput.value = "";
+    updateProductsPanels();
 
     if (!mode.file || !mode.rows) {
       els.uploadIdle.hidden = false;
@@ -182,7 +311,7 @@
       els.previewWrap.hidden = true;
       els.btnExcel.disabled = true;
       els.btnCsv.disabled = true;
-      els.btnProcess.disabled = !state.ready;
+      refreshProcessButton();
       return;
     }
 
@@ -192,19 +321,28 @@
     if (els.fileBadge) els.fileBadge.textContent = formatBadge(mode.detectedFormat);
     els.fileName.textContent = mode.file.name;
     els.fileMeta.textContent = `${(mode.file.size / 1024).toFixed(1)} KB`;
-    els.btnProcess.disabled = !state.ready;
 
     if (mode.result) {
       renderPreview(mode.result);
       els.btnExcel.disabled = false;
       els.btnCsv.disabled = false;
-      showMessage("info", cfg.successMessage(mode.result.row_count));
+      showMessage(
+        "info",
+        state.mode === "products"
+          ? MODES.products.successMessage(mode.result.row_count)
+          : cfg.successMessage(mode.result.row_count)
+      );
     } else {
       els.previewWrap.hidden = true;
       els.btnExcel.disabled = true;
       els.btnCsv.disabled = true;
-      showMessage("info", cfg.loadedMessage(rowsLength(mode.rows)));
+      const msg =
+        state.mode === "products"
+          ? productsStatusMessage(mode)
+          : cfg.loadedMessage(rowsLength(mode.rows));
+      showMessage("info", msg);
     }
+    refreshProcessButton();
   }
 
   const SUPPORTED_FILE_RE = /\.(csv|xlsx|xls)$/i;
@@ -303,13 +441,18 @@
     if (els.fileBadge) els.fileBadge.textContent = formatBadge(format);
     els.fileName.textContent = file.name;
     els.fileMeta.textContent = `${(file.size / 1024).toFixed(1)} KB`;
-    els.btnProcess.disabled = !state.ready;
     els.btnExcel.disabled = true;
     els.btnCsv.disabled = true;
     els.previewWrap.hidden = true;
     hideProgress();
     mode.result = null;
-    showMessage("info", cfg.loadedMessage(rowsLength(mode.rows)));
+    updateProductsPanels();
+    const msg =
+      state.mode === "products"
+        ? productsStatusMessage(mode)
+        : cfg.loadedMessage(rowsLength(mode.rows));
+    showMessage("info", msg);
+    refreshProcessButton();
   }
 
   function rowsLength(rows) {
@@ -337,6 +480,54 @@
       console.error(err);
       showMessage("error", err.message || String(err));
       els.fileInput.value = "";
+    }
+  }
+
+  async function handleCategoryFile(file) {
+    if (state.mode !== "products") return;
+    clearMessages();
+    if (!file) return;
+
+    if (!isSupportedFile(file)) {
+      showMessage("error", unsupportedFileMessage(file));
+      els.categoryFileInput.value = "";
+      return;
+    }
+
+    const mode = currentMode();
+    try {
+      const { format, rows } = await parseFile(file);
+      validateCategoryRows(rows);
+      mode.categoryFile = file;
+      mode.categoryRows = rows;
+      mode.categoryFormat = format;
+      mode.categoryValid = true;
+      mode.result = null;
+      els.categoryUploadIdle.hidden = true;
+      els.categoryUploadReady.hidden = false;
+      els.categoryFileBadge.textContent = formatBadge(format);
+      els.categoryFileName.textContent = file.name;
+      els.categoryFileMeta.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+      els.previewWrap.hidden = true;
+      els.btnExcel.disabled = true;
+      els.btnCsv.disabled = true;
+      if (mode.file) {
+        els.actions.hidden = false;
+        showMessage("info", productsStatusMessage(mode));
+      } else {
+        showMessage("info", "Category export validated — now upload the supplier product file (File 1).");
+      }
+      refreshProcessButton();
+    } catch (err) {
+      console.error(err);
+      mode.categoryFile = null;
+      mode.categoryRows = null;
+      mode.categoryFormat = null;
+      mode.categoryValid = false;
+      updateProductsPanels();
+      showMessage("error", err.message || String(err));
+      els.categoryFileInput.value = "";
+      refreshProcessButton();
     }
   }
 
@@ -422,6 +613,7 @@
     const templateBytes = await loadTemplateBytes();
     pyodide.FS.writeFile("/tmp/template.xlsx", templateBytes);
     pyodide.globals.set("SUPPLIER_ROWS_JSON", JSON.stringify(mode.rows));
+    pyodide.globals.set("CATEGORY_ROWS_JSON", JSON.stringify(mode.categoryRows));
     pyodide.globals.set("DETECTED_FORMAT", mode.detectedFormat);
 
     setProgress(8);
@@ -429,13 +621,16 @@
     await pyodide.runPythonAsync(`
 import json, convert
 _rows = json.loads(SUPPLIER_ROWS_JSON)
+_category_rows = json.loads(CATEGORY_ROWS_JSON)
 _headers, _records = convert.parse_supplier_rows(_rows)
+_category_headers, _category_records = convert.parse_odoo_category_export(_category_rows)
 `);
 
-    setProgress(25);
+    setProgress(20);
     await tickUI();
     await pyodide.runPythonAsync(`
-_odoo_headers, _mapped = convert.map_to_odoo(_headers, _records)
+_lookups = convert.build_category_lookups(_category_headers, _category_records)
+_odoo_headers, _mapped = convert.map_to_odoo(_headers, _records, _lookups)
 `);
 
     setProgress(40);
@@ -529,6 +724,16 @@ json.dumps({
       return;
     }
 
+    if (state.mode === "products") {
+      if (!mode.categoryRows || !mode.categoryValid) {
+        showMessage(
+          "error",
+          "Upload a valid Odoo category export file (File 2) before converting. The file must contain: Parent Category/Category Name, Category Name, External ID."
+        );
+        return;
+      }
+    }
+
     els.btnProcess.disabled = true;
     els.btnProcess.textContent = cfg.processingLabel;
     els.btnExcel.disabled = true;
@@ -572,8 +777,8 @@ json.dumps({
       els.btnCsv.disabled = true;
       hideProgress();
     } finally {
-      els.btnProcess.disabled = false;
       els.btnProcess.textContent = cfg.processLabel;
+      refreshProcessButton();
     }
   }
 
@@ -607,7 +812,7 @@ import categories
 `);
       state.pyodide = pyodide;
       state.ready = true;
-      if (currentMode().file) els.btnProcess.disabled = false;
+      refreshProcessButton();
     } catch (err) {
       console.error(err);
       showMessage(
@@ -623,6 +828,33 @@ import categories
   els.fileInput.addEventListener("change", (e) => {
     const file = e.target.files?.[0];
     handleFile(file);
+  });
+
+  els.categoryFileInput.addEventListener("change", (e) => {
+    const file = e.target.files?.[0];
+    handleCategoryFile(file);
+  });
+
+  ["dragenter", "dragover"].forEach((evt) => {
+    els.categoryDropZone.addEventListener(evt, (e) => {
+      if (state.mode !== "products") return;
+      e.preventDefault();
+      e.stopPropagation();
+      els.categoryUpload.classList.add("dragover");
+    });
+  });
+  ["dragleave", "drop"].forEach((evt) => {
+    els.categoryDropZone.addEventListener(evt, (e) => {
+      if (state.mode !== "products") return;
+      e.preventDefault();
+      e.stopPropagation();
+      els.categoryUpload.classList.remove("dragover");
+    });
+  });
+  els.categoryDropZone.addEventListener("drop", (e) => {
+    if (state.mode !== "products") return;
+    const file = e.dataTransfer?.files?.[0];
+    if (file) handleCategoryFile(file);
   });
 
   ["dragenter", "dragover"].forEach((evt) => {
