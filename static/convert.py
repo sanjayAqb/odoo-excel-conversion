@@ -169,6 +169,34 @@ def resolve_pos_category_external_id(
     return ""
 
 
+def _as_text_identifier(value: Any) -> str:
+    """Preserve barcodes/PLUs as full digit strings (never scientific notation)."""
+    if value is None:
+        return ""
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        if value == int(value):
+            return str(int(value))
+        return str(value)
+    text = str(value).strip()
+    if not text:
+        return ""
+    upper = text.upper()
+    if "E+" in upper or "E-" in upper:
+        try:
+            as_float = float(text)
+            if as_float == int(as_float):
+                return str(int(as_float))
+        except (ValueError, OverflowError):
+            pass
+    if re.fullmatch(r"-?\d+\.0+", text):
+        return text.split(".")[0]
+    return text
+
+
 def _normalize(value: Any) -> str:
     if value is None:
         return ""
@@ -265,6 +293,9 @@ def parse_supplier_rows(rows: list[list[Any]]) -> tuple[list[str], list[dict[str
                 record[header] = int(val)
             else:
                 record[header] = val
+            key = _normalize(header)
+            if key in ("barcode", "plu"):
+                record[header] = _as_text_identifier(record[header])
 
         name_val = record.get(resolved["name"], "")
         if str(name_val).strip() == "":
@@ -339,6 +370,8 @@ def map_to_odoo(
             val = record.get(src, "")
             if val is None:
                 val = ""
+            if dst in ("Barcode", "Internal Reference"):
+                val = _as_text_identifier(val)
             out[dst] = val
         # Static Odoo defaults (not sourced from supplier sheet)
         out["Track Inventory"] = 1
@@ -441,6 +474,8 @@ def build_xlsx_bytes(
         "Point of Sale Category / External ID",
     }
 
+    TEXT_FIELDS = {"Barcode", "Internal Reference"}
+
     total = max(len(mapped_rows), 1)
     for i, record in enumerate(mapped_rows):
         excel_row = header_row_idx + 1 + i
@@ -448,7 +483,13 @@ def build_xlsx_bytes(
             col = header_to_col.get(field)
             if col is None:
                 continue
-            ws.cell(row=excel_row, column=col, value=_cell_value(record.get(field)))
+            if field in TEXT_FIELDS:
+                cell = ws.cell(row=excel_row, column=col)
+                text = _as_text_identifier(record.get(field))
+                cell.value = text or None
+                cell.number_format = "@"
+            else:
+                ws.cell(row=excel_row, column=col, value=_cell_value(record.get(field)))
 
         if i == 0 or (i + 1) % 25 == 0 or i + 1 == total:
             pct = progress_start + int((i + 1) / total * (progress_end - progress_start))

@@ -18,7 +18,6 @@
         <div>
           <div class="brand-title">
             <h1>Odoo Excel Conversion</h1>
-            <span class="badge-browser">Browser-based</span>
           </div>
           <p id="heroLede">Convert supplier sheets to Odoo import files</p>
         </div>
@@ -26,93 +25,98 @@
     </header>
 
     <main class="workspace card">
-      <section class="upload" id="dropZone">
-        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
-
-        <div class="upload-steps-wrap">
-          <div class="upload-steps" role="tablist" aria-label="Choose what to create">
-            <button type="button" role="tab" class="upload-step active" data-mode="categories" id="tabCategories" aria-selected="true">
-              <span class="upload-step-num">1</span>
-              <span class="upload-step-text">
-                <strong>Categories</strong>
-                <span>Odoo category file</span>
-              </span>
-            </button>
-            <span class="upload-steps-arrow" aria-hidden="true">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M5 12h14M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+      <div class="mode-tabs">
+        <div class="upload-steps" role="tablist" aria-label="Choose what to create">
+          <button type="button" role="tab" class="upload-step active" data-mode="categories" id="tabCategories" aria-selected="true">
+            <span class="upload-step-text">
+              <strong>Categories</strong>
+              <span>Generate Odoo category file to import into Odoo</span>
             </span>
-            <button type="button" role="tab" class="upload-step" data-mode="products" id="tabProducts" aria-selected="false">
-              <span class="upload-step-num">2</span>
-              <span class="upload-step-text">
-                <strong>Products</strong>
-                <span>Odoo product file</span>
-              </span>
-            </button>
-          </div>
+          </button>
+          <button type="button" role="tab" class="upload-step" data-mode="products" id="tabProducts" aria-selected="false">
+            <span class="upload-step-text">
+              <strong>Products</strong>
+              <span>Generate Odoo product file to import into Odoo</span>
+            </span>
+          </button>
         </div>
+      </div>
 
-        <div class="supplier-file-label" id="supplierFileLabel" hidden>
-          <span class="category-upload-num">1</span>
-          <div>
-            <strong>Supplier product file</strong>
-            <span>Same file used for product data (Department, Sub-Department, etc.)</span>
-          </div>
-        </div>
-
-        <div class="upload-empty" id="uploadIdle">
-          <div class="upload-graphic" aria-hidden="true">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <path d="M12 16V4m0 0l-4 4m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
-              <path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <p class="upload-lead" id="uploadHint">Drop your supplier file here, or browse to upload</p>
-          <p class="upload-sub">CSV, XLSX, or XLS</p>
-          <label class="btn btn-primary" for="fileInput">Choose file</label>
-        </div>
-
-        <div class="upload-selected" id="uploadReady" hidden>
-          <div class="file-row">
-            <div class="file-badge" id="fileBadge" aria-hidden="true">CSV</div>
-            <div class="file-info">
-              <strong id="fileName">—</strong>
-              <span id="fileMeta">—</span>
+      <div class="upload-group">
+        <div class="file-slot" id="supplierFileSlot">
+          <div class="file-slot-header" id="supplierFileLabel" hidden>
+            <span class="file-slot-num">1</span>
+            <div>
+              <strong>Supplier product file</strong>
+              <span>Product data including Department and Sub-Department</span>
             </div>
-            <label class="btn btn-outline" for="fileInput">Change file</label>
           </div>
-        </div>
-      </section>
+          <section class="upload" id="dropZone">
+            <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
 
-      <section class="category-upload" id="categoryUpload" hidden>
-        <div class="category-upload-label">
-          <span class="category-upload-num">2</span>
-          <div>
-            <strong>Odoo category export</strong>
-            <span>Product categories exported from Odoo (CSV or Excel)</span>
-          </div>
-        </div>
-        <input type="file" id="categoryFileInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
-
-        <div class="category-upload-body" id="categoryDropZone">
-          <div class="category-upload-empty" id="categoryUploadIdle">
-            <p class="upload-lead">Drop Odoo category export here, or browse to upload</p>
-            <label class="btn btn-outline" for="categoryFileInput">Choose category file</label>
-          </div>
-
-          <div class="category-upload-selected" id="categoryUploadReady" hidden>
-            <div class="file-row">
-              <div class="file-badge" id="categoryFileBadge" aria-hidden="true">CSV</div>
-              <div class="file-info">
-                <strong id="categoryFileName">—</strong>
-                <span id="categoryFileMeta">—</span>
+            <div class="upload-empty" id="uploadIdle">
+              <div class="upload-graphic" aria-hidden="true">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M12 16V4m0 0l-4 4m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4" stroke-linecap="round"/>
+                </svg>
               </div>
-              <label class="btn btn-outline" for="categoryFileInput">Change file</label>
+              <p class="upload-lead" id="uploadHint">Drop your supplier file here, or browse to upload</p>
+              <p class="upload-sub">CSV, XLSX, or XLS</p>
+              <label class="btn btn-primary" for="fileInput">Choose file</label>
+            </div>
+
+            <div class="upload-selected" id="uploadReady" hidden>
+              <div class="file-row">
+                <div class="file-badge" id="fileBadge" aria-hidden="true">CSV</div>
+                <div class="file-info">
+                  <strong id="fileName">—</strong>
+                  <span id="fileMeta">—</span>
+                </div>
+                <label class="btn btn-outline" for="fileInput">Change file</label>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="file-slot" id="categoryFileSlot" hidden>
+          <div class="file-slot-header">
+            <span class="file-slot-num">2</span>
+            <div>
+              <strong>Odoo category export</strong>
+              <span>Product categories exported from Odoo (CSV or Excel)</span>
             </div>
           </div>
+          <section class="category-upload" id="categoryUpload">
+            <input type="file" id="categoryFileInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
+
+            <div class="category-upload-body" id="categoryDropZone">
+              <div class="category-upload-empty" id="categoryUploadIdle">
+                <div class="upload-graphic" aria-hidden="true">
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 16V4m0 0l-4 4m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M4 14v4a2 2 0 002 2h12a2 2 0 002-2v-4" stroke-linecap="round"/>
+                  </svg>
+                </div>
+                <p class="upload-lead">Drop Odoo category export here, or browse to upload</p>
+                <p class="upload-sub">CSV, XLSX, or XLS</p>
+                <label class="btn btn-accent" for="categoryFileInput">Choose category file</label>
+              </div>
+
+              <div class="category-upload-selected" id="categoryUploadReady" hidden>
+                <div class="file-row">
+                  <div class="file-badge" id="categoryFileBadge" aria-hidden="true">CSV</div>
+                  <div class="file-info">
+                    <strong id="categoryFileName">—</strong>
+                    <span id="categoryFileMeta">—</span>
+                  </div>
+                  <label class="btn btn-outline" for="categoryFileInput">Change file</label>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
-      </section>
+      </div>
 
       <section class="toolbar" id="actions" hidden>
         <button type="button" class="btn btn-primary" id="btnProcess" disabled>Generate</button>
@@ -185,7 +189,7 @@
       </section>
     </main>
 
-    <footer class="footer">Browser-based — your files never leave your device.</footer>
+    <footer class="footer"></footer>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>

@@ -6,7 +6,7 @@
   const MODES = {
     categories: {
       templateUrl: "sample_sheets/NewProductCateg.csv",
-      lede: "Two-step import — categories first, then products",
+      lede: "Generate Odoo category import files from supplier sheets",
       uploadHint: "Drop your supplier file here, or browse to upload",
       loadedMessage: (rows) => `${rows} rows loaded — click Generate`,
       processLabel: "Generate",
@@ -19,13 +19,12 @@
     },
     products: {
       templateUrl: "sample_sheets/SampleOdooFormat.xlsx",
-      lede: "Two-step import — categories first, then products",
+      lede: "Generate Odoo product import files from supplier and category exports",
       uploadHint: "Drop your supplier product file here, or browse to upload",
-      loadedMessage: (rows) => `${rows} product rows loaded — upload Odoo category export, then Convert`,
+      loadedMessage: (rows) => `${rows} product rows loaded — upload Odoo category export, then convert`,
       supplierReadyMessage: (rows) => `${rows} product rows loaded — now upload the Odoo category export (File 2)`,
-      categoryReadyMessage: "Category export validated — click Convert",
-      processLabel: "Convert",
-      processingLabel: "Converting…",
+      processLabel: "Convert to Odoo format",
+      processingLabel: "Converting to Odoo format…",
       successMessage: (count) => `${count} products ready. Download Product Excel or CSV.`,
       previewLabel: (count, previewLen) =>
         previewLen < count ? `${previewLen} of ${count} rows` : `${count} rows`,
@@ -74,6 +73,7 @@
     mappingProducts: document.getElementById("mappingProducts"),
     mappingCategories: document.getElementById("mappingCategories"),
     supplierFileLabel: document.getElementById("supplierFileLabel"),
+    categoryFileSlot: document.getElementById("categoryFileSlot"),
     categoryUpload: document.getElementById("categoryUpload"),
     categoryFileInput: document.getElementById("categoryFileInput"),
     categoryDropZone: document.getElementById("categoryDropZone"),
@@ -211,7 +211,7 @@
   function updateProductsPanels() {
     const isProducts = state.mode === "products";
     els.supplierFileLabel.hidden = !isProducts;
-    els.categoryUpload.hidden = !isProducts;
+    els.categoryFileSlot.hidden = !isProducts;
 
     if (!isProducts) return;
 
@@ -229,9 +229,9 @@
   function productsStatusMessage(mode) {
     const cfg = MODES.products;
     if (mode.result) return cfg.successMessage(mode.result.row_count);
-    if (mode.rows && mode.categoryValid) return cfg.categoryReadyMessage;
+    if (mode.rows && mode.categoryValid) return null;
     if (mode.rows) return cfg.supplierReadyMessage(rowsLength(mode.rows));
-    return cfg.uploadHint;
+    return null;
   }
 
   function refreshProcessButton() {
@@ -340,7 +340,7 @@
         state.mode === "products"
           ? productsStatusMessage(mode)
           : cfg.loadedMessage(rowsLength(mode.rows));
-      showMessage("info", msg);
+      if (msg) showMessage("info", msg);
     }
     refreshProcessButton();
   }
@@ -399,15 +399,45 @@
     return null;
   }
 
+  function normalizeIdentifierColumns(rows) {
+    const headerRowIdx = rows.findIndex((row) => {
+      const norms = row.map((c) => String(c || "").trim().toLowerCase());
+      return norms.includes("name") && (norms.includes("barcode") || norms.includes("plu"));
+    });
+    if (headerRowIdx < 0) return rows;
+
+    const headers = rows[headerRowIdx].map((h) => String(h || "").trim().toLowerCase());
+    const idCols = ["barcode", "plu"]
+      .map((name) => headers.indexOf(name))
+      .filter((idx) => idx >= 0);
+    if (!idCols.length) return rows;
+
+    return rows.map((row, rowIdx) => {
+      if (rowIdx <= headerRowIdx) return row;
+      const next = row.slice();
+      idCols.forEach((colIdx) => {
+        const val = next[colIdx];
+        if (typeof val === "number" && Number.isFinite(val)) {
+          next[colIdx] = String(Math.trunc(val));
+        } else if (typeof val === "string" && /[eE][+-]?\d+/.test(val.trim())) {
+          const n = Number(val);
+          if (Number.isFinite(n)) next[colIdx] = String(Math.trunc(n));
+        }
+      });
+      return next;
+    });
+  }
+
   function sheetToRows(workbook) {
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
-    return XLSX.utils.sheet_to_json(sheet, {
+    const rows = XLSX.utils.sheet_to_json(sheet, {
       header: 1,
       defval: "",
-      raw: false,
+      raw: true,
       blankrows: false,
     });
+    return normalizeIdentifierColumns(rows);
   }
 
   async function parseFile(file) {
@@ -451,7 +481,7 @@
       state.mode === "products"
         ? productsStatusMessage(mode)
         : cfg.loadedMessage(rowsLength(mode.rows));
-    showMessage("info", msg);
+    if (msg) showMessage("info", msg);
     refreshProcessButton();
   }
 
@@ -513,7 +543,7 @@
       els.btnCsv.disabled = true;
       if (mode.file) {
         els.actions.hidden = false;
-        showMessage("info", productsStatusMessage(mode));
+        clearMessages();
       } else {
         showMessage("info", "Category export validated — now upload the supplier product file (File 1).");
       }
@@ -529,6 +559,23 @@
       els.categoryFileInput.value = "";
       refreshProcessButton();
     }
+  }
+
+  function formatCellValue(header, val) {
+    if (val == null || val === "") return "";
+    const key = String(header).toLowerCase();
+    if (key === "barcode" || key === "internal reference" || key === "plu") {
+      if (typeof val === "number" && Number.isFinite(val)) {
+        return String(Math.trunc(val));
+      }
+      const text = String(val).trim();
+      if (/[eE][+-]?\d+/.test(text)) {
+        const n = Number(text);
+        if (Number.isFinite(n)) return String(Math.trunc(n));
+      }
+      return text;
+    }
+    return String(val);
   }
 
   function renderPreview(result) {
@@ -554,7 +601,7 @@
       headers.forEach((h) => {
         const td = document.createElement("td");
         const val = row[h];
-        td.textContent = val == null || val === "" ? "" : String(val);
+        td.textContent = formatCellValue(h, val);
         td.title = td.textContent;
         tr.appendChild(td);
       });
