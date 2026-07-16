@@ -578,6 +578,8 @@
     return String(val);
   }
 
+  const TEXT_ID_COLUMNS = new Set(["Barcode", "Internal Reference", "External ID"]);
+
   function renderPreview(result) {
     const cfg = modeConfig();
     const thead = els.previewTable.querySelector("thead");
@@ -603,6 +605,7 @@
         const val = row[h];
         td.textContent = formatCellValue(h, val);
         td.title = td.textContent;
+        if (TEXT_ID_COLUMNS.has(h)) td.classList.add("cell-text-id");
         tr.appendChild(td);
       });
       tbody.appendChild(tr);
@@ -839,7 +842,7 @@ json.dumps({
 import micropip
 await micropip.install("openpyxl")
 `);
-      const [convertCode, categoriesCode] = await Promise.all([
+      const [convertCode, categoriesCode, xlsxStylesCode] = await Promise.all([
         fetch("static/convert.py?v=" + Date.now()).then((r) => {
           if (!r.ok) throw new Error("Could not load convert.py");
           return r.text();
@@ -848,9 +851,14 @@ await micropip.install("openpyxl")
           if (!r.ok) throw new Error("Could not load categories.py");
           return r.text();
         }),
+        fetch("static/xlsx_styles.py?v=" + Date.now()).then((r) => {
+          if (!r.ok) throw new Error("Could not load xlsx_styles.py");
+          return r.text();
+        }),
       ]);
       pyodide.FS.writeFile("/home/pyodide/convert.py", convertCode);
       pyodide.FS.writeFile("/home/pyodide/categories.py", categoriesCode);
+      pyodide.FS.writeFile("/home/pyodide/xlsx_styles.py", xlsxStylesCode);
       await pyodide.runPythonAsync(`
 import sys
 sys.path.insert(0, "/home/pyodide")

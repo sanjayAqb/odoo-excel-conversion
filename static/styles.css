@@ -78,19 +78,6 @@ html, body {
   flex-wrap: wrap;
 }
 
-.badge-browser {
-  font-size: 0.68rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--accent-hover);
-  background: var(--accent-soft);
-  border: 1px solid #99f6e4;
-  padding: 0.2rem 0.5rem;
-  border-radius: 6px;
-  white-space: nowrap;
-}
-
 .brand p {
   margin: 0.15rem 0 0;
   font-size: 0.85rem;
@@ -208,10 +195,15 @@ html, body {
   padding: 0 0.15rem;
 }
 
-.file-slot-header strong {
+.file-slot-header > div > strong {
   display: block;
   font-size: 0.92rem;
   font-weight: 700;
+  color: var(--text);
+}
+
+.file-slot-header > div > span strong {
+  font-weight: 600;
   color: var(--text);
 }
 
@@ -580,34 +572,37 @@ table {
 thead th {
   position: sticky;
   top: 0;
-  background: #f8fafc;
-  color: var(--text-muted);
-  text-align: left;
+  background: #d3d3d3;
+  color: #000000;
+  text-align: center;
   padding: 0.6rem 0.85rem;
   white-space: nowrap;
-  border-bottom: 1px solid var(--border);
-  font-weight: 600;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  border: 1px solid #b0b0b0;
+  font-weight: 700;
+  font-size: 0.78rem;
 }
 
 tbody td {
   padding: 0.55rem 0.85rem;
-  border-bottom: 1px solid #f1f5f9;
+  border: 1px solid #e2e8f0;
   white-space: nowrap;
   color: var(--text);
 }
 
-tbody td:first-child {
+tbody td:first-child:not(.cell-text-id) {
   max-width: 360px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-tbody tr:last-child td { border-bottom: none; }
+tbody td.cell-text-id {
+  font-family: ui-monospace, "Cascadia Code", "Source Code Pro", monospace;
+  font-variant-numeric: tabular-nums;
+}
 
-tbody tr:hover td { background: #f8fafc; }
+tbody tr:nth-child(even) td { background: #f8fafc; }
+
+tbody tr:hover td { background: #f1f5f9; }
 
 .footer {
   margin-top: 1.25rem;
@@ -710,6 +705,107 @@ tbody tr:hover td { background: #f8fafc; }
   font-size: 0.8rem;
   color: var(--text-muted);
   line-height: 1.45;
+}
+
+/* Odoo export help (Products tab, file 2) */
+.export-help {
+  border-color: var(--info-border);
+  background: var(--info-bg);
+}
+
+.export-help-trigger {
+  background: var(--info-bg);
+  color: var(--info-text);
+  padding: 0.85rem 1.15rem;
+}
+
+.export-help-trigger:hover,
+.export-help-trigger[aria-expanded="true"] {
+  background: #ccfbf1;
+  color: var(--accent-hover);
+}
+
+.export-help-trigger-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.export-help-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.export-help-body {
+  background: var(--surface);
+  padding: 1.1rem 1.15rem 1.2rem;
+}
+
+.export-help-lead {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+.export-help-fields {
+  margin: 0.9rem 0 0;
+  padding-left: 1.35rem;
+  font-size: 0.84rem;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.export-help-fields li + li {
+  margin-top: 0.45rem;
+}
+
+.export-help-steps {
+  margin: 1.35rem 0 0;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 1.5rem;
+}
+
+.export-help-step p {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.export-help-figure {
+  margin: 1rem 0 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.export-help-figure img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.export-help-figure figcaption {
+  padding: 0.55rem 0.75rem;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  line-height: 1.4;
+}
+
+.export-help-note {
+  margin: 1.35rem 0 0;
+  padding: 0.75rem 0.9rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--info-text);
+  background: var(--info-bg);
+  border: 1px solid var(--info-border);
+  border-radius: 8px;
 }
 
 @media (max-width: 900px) {

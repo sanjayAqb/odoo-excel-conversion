@@ -48,7 +48,7 @@
             <span class="file-slot-num">1</span>
             <div>
               <strong>Supplier product file</strong>
-              <span>Product data including Department and Sub-Department</span>
+              <span>Product data including <strong>Department</strong> and <strong>Sub-Department</strong></span>
             </div>
           </div>
           <section class="upload" id="dropZone">
@@ -83,10 +83,56 @@
           <div class="file-slot-header">
             <span class="file-slot-num">2</span>
             <div>
-              <strong>Odoo category export</strong>
-              <span>Product categories exported from Odoo (CSV or Excel)</span>
+              <strong>All categories exported from Odoo</strong>
+              <span>All categories exported from Odoo (CSV or Excel)</span>
             </div>
           </div>
+
+          <section class="collapse export-help" id="categoryExportHelp">
+            <button type="button" class="collapse-trigger export-help-trigger" aria-expanded="false" aria-controls="categoryExportHelpBody">
+              <span class="export-help-trigger-label">
+                <svg class="export-help-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 11v5" stroke-linecap="round"/>
+                  <circle cx="12" cy="8" r="0.5" fill="currentColor" stroke="none"/>
+                </svg>
+                How to export categories from Odoo
+              </span>
+              <svg class="collapse-chevron" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div class="collapse-body export-help-body" id="categoryExportHelpBody" hidden>
+              <p class="export-help-lead">
+                When exporting <strong>PoS Product Categories</strong> from Odoo, include only these three fields in your export file:
+              </p>
+              <ul class="export-help-fields">
+                <li><strong>Parent Category/Category Name</strong></li>
+                <li><strong>Category Name</strong></li>
+                <li><strong>External ID</strong></li>
+              </ul>
+
+              <ol class="export-help-steps">
+                <li class="export-help-step">
+                  <p><strong>Step 1 — Open Export</strong> In Odoo, go to <em>Point of Sale → PoS Product Categories</em>, select your categories, then choose <strong>Actions → Export</strong>.</p>
+                  <figure class="export-help-figure">
+                    <img src="sample_images/Category_Export.png" alt="Odoo PoS Product Categories list with Actions menu open and Export selected" loading="lazy" />
+                    <figcaption>Select categories, then Actions → Export.</figcaption>
+                  </figure>
+                </li>
+                <li class="export-help-step">
+                  <p><strong>Step 2 — Select required fields</strong> In the Export Data dialog, add exactly the three fields listed above to <strong>Fields to export</strong>. You can export as XLSX or CSV.</p>
+                  <figure class="export-help-figure">
+                    <img src="sample_images/Category_Export_Necessary_Fields.png" alt="Odoo Export Data dialog showing Parent Category/Category Name, Category Name, and External ID in Fields to export" loading="lazy" />
+                    <figcaption>Fields to export must include Parent Category/Category Name, Category Name, and External ID.</figcaption>
+                  </figure>
+                </li>
+              </ol>
+
+              <p class="export-help-note">Upload the exported file here. If any of the three columns are missing, the file cannot be processed.</p>
+            </div>
+          </section>
+
           <section class="category-upload" id="categoryUpload">
             <input type="file" id="categoryFileInput" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden />
 
@@ -189,7 +235,6 @@
       </section>
     </main>
 
-    <footer class="footer"></footer>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>

@@ -11,7 +11,8 @@ import re
 from typing import Any
 
 from openpyxl import Workbook
-from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+
+from xlsx_styles import autofit_columns, freeze_below_header, style_data_cell, style_header_cell
 
 CATEGORY_HEADERS = [
     "External ID",
@@ -205,23 +206,18 @@ def build_category_xlsx_bytes(headers: list[str], mapped_rows: list[dict[str, An
     ws = wb.active
     ws.title = "Product Categories"
 
-    header_fill = PatternFill(fill_type="solid", fgColor="D3D3D3")
-    header_font = Font(bold=True, color="000000")
-    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    thin = Side(style="thin", color="B0B0B0")
-    header_border = Border(left=thin, right=thin, top=thin, bottom=thin)
-
     for col, header in enumerate(headers, start=1):
-        cell = ws.cell(row=1, column=col, value=header)
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = header_alignment
-        cell.border = header_border
+        style_header_cell(ws.cell(row=1, column=col, value=header))
 
     for row_idx, record in enumerate(mapped_rows, start=2):
+        zebra = (row_idx - 2) % 2 == 1
         for col, header in enumerate(headers, start=1):
             value = record.get(header, "")
-            ws.cell(row=row_idx, column=col, value="" if value is None else value)
+            cell = ws.cell(row=row_idx, column=col, value="" if value is None else value)
+            style_data_cell(cell, zebra=zebra)
+
+    autofit_columns(ws)
+    freeze_below_header(ws)
 
     buf = io.BytesIO()
     wb.save(buf)

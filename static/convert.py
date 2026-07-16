@@ -12,7 +12,15 @@ import re
 from typing import Any
 
 from openpyxl import load_workbook
-from openpyxl.styles import Alignment, Font, PatternFill, Border, Side
+
+from xlsx_styles import (
+    CURRENCY_FORMAT,
+    PERCENT_FORMAT,
+    autofit_columns,
+    freeze_below_header,
+    style_data_cell,
+    style_header_cell,
+)
 
 REQUIRED_SUPPLIER_KEYS = [
     "name",
@@ -442,19 +450,11 @@ def build_xlsx_bytes(
         raise ValueError("Odoo template is missing a header row with a Name column.")
 
     # Apply consistent header styling across all template columns
-    header_fill = PatternFill(fill_type="solid", fgColor="D3D3D3")
-    header_font = Font(bold=True, color="000000")
-    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
-    thin = Side(style="thin", color="B0B0B0")
-    header_border = Border(left=thin, right=thin, top=thin, bottom=thin)
     for col in range(1, ws.max_column + 1):
         cell = ws.cell(row=header_row_idx, column=col)
         if cell.value is None or str(cell.value).strip() == "":
             continue
-        cell.fill = header_fill
-        cell.font = header_font
-        cell.alignment = header_alignment
-        cell.border = header_border
+        style_header_cell(cell)
 
     # Delete existing data rows below the header, preserving column structure/styles on header
     if ws.max_row > header_row_idx:
@@ -475,10 +475,13 @@ def build_xlsx_bytes(
     }
 
     TEXT_FIELDS = {"Barcode", "Internal Reference"}
+    CURRENCY_FIELDS = {"Cost", "Sales Price", "U Cost Price"}
+    PERCENT_FIELDS = {"Markup %", "VAT %", "Gross Margin %"}
 
     total = max(len(mapped_rows), 1)
     for i, record in enumerate(mapped_rows):
         excel_row = header_row_idx + 1 + i
+        zebra = i % 2 == 1
         for field in mapped_fields:
             col = header_to_col.get(field)
             if col is None:
@@ -489,11 +492,19 @@ def build_xlsx_bytes(
                 cell.value = text or None
                 cell.number_format = "@"
             else:
-                ws.cell(row=excel_row, column=col, value=_cell_value(record.get(field)))
+                cell = ws.cell(row=excel_row, column=col, value=_cell_value(record.get(field)))
+                if field in CURRENCY_FIELDS:
+                    cell.number_format = CURRENCY_FORMAT
+                elif field in PERCENT_FIELDS:
+                    cell.number_format = PERCENT_FORMAT
+            style_data_cell(cell, zebra=zebra)
 
         if i == 0 or (i + 1) % 25 == 0 or i + 1 == total:
             pct = progress_start + int((i + 1) / total * (progress_end - progress_start))
             _emit_progress(pct, progress_cb)
+
+    autofit_columns(ws, min_row=header_row_idx)
+    freeze_below_header(ws, header_row_idx)
 
     buf = io.BytesIO()
     wb.save(buf)
